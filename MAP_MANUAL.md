@@ -35,3 +35,4 @@ cd map && python3 -m http.server 8765 # http://localhost:8765/ を開く
 ## 更新履歴
 
 - 2026-10-03: 地図ページ・生成スクリプトを新規作成、動作確認済み（クラスタ・ポップアップ）
+- 2026-10-03: GitHub Pages で公開（Source=GitHub Actions）。`map/` を変更して push すると自動で再公開、手動は Actions の Run workflow
