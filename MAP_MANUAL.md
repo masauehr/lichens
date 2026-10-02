@@ -12,6 +12,8 @@
 | `map/photos.json` | 位置・日時・画像パスの一覧（生成物） |
 | `map/thumbs/`, `map/photos/` | サムネイル（320px）・表示用（1200px）（生成物） |
 
+公開URL: https://masauehr.github.io/lichens/ （GitHub Pages。`.github/workflows/pages.yml` で `map/` のみ公開）
+
 ## 使い方
 
 ```bash
