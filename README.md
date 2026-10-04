@@ -1,6 +1,7 @@
 # lichens — 地衣類写真データベース
 
-地図表示機能の詳しい使い方は [MAP_MANUAL.md](MAP_MANUAL.md) を参照。
+地図表示機能・写真アプリからの自動抽出・公開版の作り方・座標周辺の枚数確認（`?probe=1`）は [MAP_MANUAL.md](MAP_MANUAL.md) を参照。
+公開地図: https://masauehr.github.io/lichens/
 
 MacBookの写真アプリから抽出した地衣類画像を整理・データベース化するプロジェクト。
 家族写真管理ワークフローのプロトタイプを兼ねる。
