@@ -15,6 +15,22 @@
       background: rgba(255,255,255,.92); padding: 6px 12px; border-radius: 6px;
       font-size: 14px; box-shadow: 0 1px 4px rgba(0,0,0,.3);
     }
+    #probe {
+      display: none; position: absolute; z-index: 1000; bottom: 24px; left: 10px;
+      background: rgba(255,255,255,.95); padding: 8px 12px; border-radius: 6px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.3); font-size: 13px; line-height: 1.6;
+    }
+    #info button { margin-left: 10px; cursor: pointer; }
+    #nopos {
+      display: none; position: absolute; z-index: 1000; top: 52px; right: 10px; bottom: 10px;
+      width: min(360px, 90vw); overflow-y: auto; background: rgba(255,255,255,.95);
+      border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,.3); padding: 8px;
+    }
+    #nopos h3 { margin: 0 0 6px; font-size: 14px; }
+    #nopos .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+    #nopos figure { margin: 0; font-size: 10px; text-align: center; }
+    #nopos img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 3px; cursor: zoom-in; display: block; }
+    #info label { margin-left: 10px; white-space: nowrap; }
     .thumb-icon { border: 2px solid #fff; border-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,.5); object-fit: cover; }
     .popup img { width: 240px; max-width: 100%; border-radius: 4px; cursor: zoom-in; display: block; }
     .popup div { margin-top: 4px; font-size: 13px; }
@@ -28,6 +44,8 @@
 <body>
   <div id="info">読み込み中…</div>
   <div id="map"></div>
+  <div id="nopos"></div>
+  <div id="probe"></div>
   <div id="viewer"><img alt=""></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -56,30 +74,108 @@
         `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
     }
 
-    fetch('photos.json').then(r => r.json()).then(photos => {
-      const cluster = L.markerClusterGroup({ maxClusterRadius: 40 });
-      photos.forEach(p => {
-        const icon = L.divIcon({
-          className: '',
-          html: `<img class="thumb-icon" src="${p.thumb}" width="40" height="40">`,
-          iconSize: [44, 44],
-        });
-        const m = L.marker([p.lat, p.lon], { icon });
-        const box = document.createElement('div');
-        box.className = 'popup';
-        box.innerHTML = `<img src="${p.thumb}" alt="${p.id}"><div>${p.id}　${fmt(p.taken)}</div>`;
-        box.querySelector('img').addEventListener('click', () => {
-          viewer.querySelector('img').src = p.photo;
-          viewer.style.display = 'flex';
-        });
-        m.bindPopup(box);
-        cluster.addLayer(m);
+    // 種別（kind）: main=地衣類が主役 / maybe=可能性あり / context=前後の全景。kindが無いデータは全て main 扱い
+    const KINDS = { main: '地衣類', maybe: '可能性', context: '全景' };
+    const cluster = L.markerClusterGroup({ maxClusterRadius: 40 });
+    let photos = [];
+    const info = document.getElementById('info');
+    const shown = { main: true, maybe: true, context: true };
+
+    function makeMarker(p) {
+      const icon = L.divIcon({
+        className: '',
+        html: `<img class="thumb-icon" src="${p.thumb}" width="40" height="40">`,
+        iconSize: [44, 44],
       });
+      const m = L.marker([p.lat, p.lon], { icon });
+      const box = document.createElement('div');
+      box.className = 'popup';
+      box.innerHTML = `<img src="${p.thumb}" alt="${p.id}"><div>${p.id}　${fmt(p.taken)}` +
+        `${p.kind ? '　[' + KINDS[p.kind] + ']' : ''}${p.est ? '　<small>※位置は推定</small>' : ''}</div>`;
+      if (p.photo) {
+        box.querySelector('img').addEventListener('click', () => showViewer(p));
+      }
+      m.bindPopup(box);
+      return m;
+    }
+
+    const nopos = document.getElementById('nopos');
+
+    function showViewer(p) {
+      viewer.querySelector('img').src = p.photo || p.thumb;
+      viewer.style.display = 'flex';
+    }
+
+    // 位置不明の写真は、ピンの代わりにサムネイル一覧（パネル）で見られるようにする
+    function renderNoPos(list) {
+      nopos.innerHTML = `<h3>位置不明の写真（${list.length}枚）</h3><div class="grid"></div>`;
+      const grid = nopos.querySelector('.grid');
+      list.forEach(p => {
+        const fig = document.createElement('figure');
+        fig.innerHTML = `<img loading="lazy" src="${p.thumb}" alt="${p.id}"><figcaption>${fmt(p.taken)}` +
+          `${p.kind ? '<br>' + KINDS[p.kind] : ''}</figcaption>`;
+        fig.querySelector('img').addEventListener('click', () => showViewer(p));
+        grid.appendChild(fig);
+      });
+      const btn = info.querySelector('.nopos-btn');
+      if (btn) btn.textContent = `位置不明 ${list.length}枚`;
+    }
+
+    function render(fit) {
+      cluster.clearLayers();
+      const list = photos.filter(p => shown[p.kind || 'main']);
+      const located = list.filter(p => p.lat != null);
+      cluster.addLayers(located.map(makeMarker));
+      if (fit && located.length) map.fitBounds(cluster.getBounds().pad(0.1));
+      info.querySelector('.count').textContent = `${located.length}枚`;
+      renderNoPos(list.filter(p => p.lat == null));
+    }
+
+
+    // 確認用: ?probe=1 のときだけ有効。地図をクリックすると、その地点から半径r(m)以内の写真数を表示する
+    // （公開したくない場所の確認・除外範囲の決定用。公開ページでは使わない）
+    if (new URLSearchParams(location.search).get('probe')) {
+      const box = document.getElementById('probe');
+      box.style.display = 'block';
+      box.innerHTML = '地図をクリックすると周辺の枚数を表示<br>半径 <input id="pr" type="number" value="500" min="50" step="50" style="width:70px"> m';
+      let circle = null;
+      map.on('click', e => {
+        const r = +document.getElementById('pr').value || 500;
+        if (circle) map.removeLayer(circle);
+        circle = L.circle(e.latlng, { radius: r, color: 'red', fillOpacity: .1 }).addTo(map);
+        const cnt = { main: 0, maybe: 0, context: 0 };
+        let n = 0;
+        photos.forEach(p => {
+          if (p.lat != null && map.distance(e.latlng, [p.lat, p.lon]) <= r) { cnt[p.kind || 'main']++; n++; }
+        });
+        box.innerHTML = `座標 ${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}<br>` +
+          `半径 <input id="pr" type="number" value="${r}" min="50" step="50" style="width:70px"> m 以内: <b>${n}枚</b>` +
+          `（地衣類 ${cnt.main} / 可能性 ${cnt.maybe} / 全景 ${cnt.context}）`;
+      });
+    }
+
+    fetch('photos.json').then(r => r.json()).then(data => {
+      photos = data;
+      const kinds = [...new Set(photos.map(p => p.kind).filter(Boolean))];
+      info.innerHTML = '地衣類フォトマップ：<span class="count"></span>';
+      kinds.forEach(k => {
+        const lab = document.createElement('label');
+        lab.innerHTML = `<input type="checkbox" checked> ${KINDS[k]}`;
+        lab.querySelector('input').addEventListener('change', e => { shown[k] = e.target.checked; render(false); });
+        info.appendChild(lab);
+      });
+      if (photos.some(p => p.lat == null)) {
+        const btn = document.createElement('button');
+        btn.className = 'nopos-btn';
+        btn.addEventListener('click', () => {
+          nopos.style.display = nopos.style.display === 'block' ? 'none' : 'block';
+        });
+        info.appendChild(btn);
+      }
       map.addLayer(cluster);
-      map.fitBounds(cluster.getBounds().pad(0.1));
-      document.getElementById('info').textContent = `地衣類フォトマップ：${photos.length}枚`;
+      render(true);
     }).catch(e => {
-      document.getElementById('info').textContent = 'photos.json の読み込みに失敗しました（ローカルでは http サーバー経由で開いてください）';
+      info.textContent = 'photos.json の読み込みに失敗しました（ローカルでは http サーバー経由で開いてください）';
       console.error(e);
     });
   </script>

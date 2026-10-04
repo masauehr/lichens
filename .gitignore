@@ -1,2 +1,7 @@
 images/raw/
 .DS_Store
+.venv/
+work/
+images/originals/
+map_local/
+map_public/
