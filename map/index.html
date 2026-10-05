@@ -79,6 +79,22 @@
     }
 
     // 種別（kind）: main=地衣類が主役 / maybe=可能性あり / context=前後の全景。kindが無いデータは全て main 扱い
+    // 前回の表示範囲（中心・ズーム）を記憶して、次回の初期表示に使う
+    const VIEW_KEY = 'lichens_map_view';
+    function loadView() {
+      try {
+        const v = JSON.parse(localStorage.getItem(VIEW_KEY));
+        if (v && Array.isArray(v.center) && v.center.length === 2 && v.center.every(Number.isFinite) && Number.isFinite(v.zoom)) return v;
+      } catch (e) { /* 保存データなし・破損・localStorage不可 */ }
+      return null;
+    }
+    function saveView() {
+      try {
+        const c = map.getCenter();
+        localStorage.setItem(VIEW_KEY, JSON.stringify({ center: [c.lat, c.lng], zoom: map.getZoom() }));
+      } catch (e) { /* 保存できない環境では記憶しない */ }
+    }
+
     const KINDS = { main: '地衣類', maybe: '可能性', context: '全景' };
     const cluster = L.markerClusterGroup({ maxClusterRadius: 40 });
     let photos = [];
@@ -204,8 +220,11 @@
         });
         info.appendChild(btn);
       }
+      const saved = loadView();
+      if (saved) map.setView(saved.center, saved.zoom, { animate: false });
       map.addLayer(cluster);
-      render(true);
+      render(!saved);  // 前回の範囲があればそこから、なければ全体が収まる範囲から始める
+      map.on('moveend', saveView);
     }).catch(e => {
       info.textContent = 'photos.json の読み込みに失敗しました（ローカルでは http サーバー経由で開いてください）';
       console.error(e);
