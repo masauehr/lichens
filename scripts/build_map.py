@@ -115,6 +115,8 @@ def main() -> None:
             item["photo"] = f"photos/{name}"
         if estimated:
             item["est"] = True
+            if e and e.get("note"):
+                item["note"] = e["note"]
         if kinds:
             item["kind"] = kinds.get(f.stem) or kinds.get(base, "context")
         items.append(item)

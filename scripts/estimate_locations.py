@@ -5,6 +5,7 @@
     nearest ... 片側のみ、--one 秒以内 → 最寄りの写真の位置
     carry   ... 上記に当てはまらない場合、直前のGPS写真から --carry 秒以内 → その写真と同じ場所
                 （デジカメの写真を翌日ごろに写真アプリへ取り込むことがあるため。間にGPS写真が無いことが前提）
+    manual  ... 上記で決まらない写真に、scripts/manual_locations.json の日付ごとの暫定位置を適用（人が場所を判断した分）
     上記以外は位置なし（地図に載せない）
 
 使い方: .venv/bin/python scripts/estimate_locations.py   → work/est_loc.json
@@ -25,16 +26,20 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--both", type=int, default=1800)
     ap.add_argument("--one", type=int, default=600)
+    ap.add_argument("--manual", default="scripts/manual_locations.json")
     ap.add_argument("--carry", type=int, default=86400, help="直前のGPS写真の場所を引き継ぐ最大秒数（既定1日）")
     args = ap.parse_args()
 
+    manual = {}
+    if args.manual and Path(args.manual).exists():
+        manual = {m["date"]: m for m in json.loads(Path(args.manual).read_text(encoding="utf-8"))}
     db = osxphotos.PhotosDB()
     ref = sorted((p for p in db.photos() if not p.ismovie and p.location[0] is not None),
                  key=lambda p: p.date)
     rt = [p.date.timestamp() for p in ref]
     album = next(a for a in db.album_info if a.title == ALBUM)
 
-    out, stat = {}, {"interp": 0, "nearest": 0, "carry": 0, "none": 0}
+    out, stat = {}, {"interp": 0, "nearest": 0, "carry": 0, "manual": 0, "none": 0}
     for p in album.photos:
         if p.location[0] is not None:
             continue
@@ -60,10 +65,14 @@ def main() -> None:
             elif prev and gp <= args.carry:  # 直前のGPS写真から1日以内: 同じ場所とみなす
                 out[stem] = {"lat": prev.location[0], "lon": prev.location[1], "method": "carry", "gap": int(gp)}
                 stat["carry"] += 1
+            elif p.date.strftime("%Y-%m-%d") in manual:  # 人が場所を判断した日の暫定位置
+                m = manual[p.date.strftime("%Y-%m-%d")]
+                out[stem] = {"lat": m["lat"], "lon": m["lon"], "method": "manual", "note": m.get("note", "暫定")}
+                stat["manual"] += 1
             else:
                 stat["none"] += 1
     Path("work/est_loc.json").write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
-    print(f"推定: 補間 {stat['interp']} / 最寄り {stat['nearest']} / 引き継ぎ {stat['carry']} / 位置なし {stat['none']}")
+    print(f"推定: 補間 {stat['interp']} / 最寄り {stat['nearest']} / 引き継ぎ {stat['carry']} / 手動 {stat['manual']} / 位置なし {stat['none']}")
 
 
 if __name__ == "__main__":

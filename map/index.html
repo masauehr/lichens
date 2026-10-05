@@ -131,7 +131,7 @@
       const box = document.createElement('div');
       box.className = 'popup';
       box.innerHTML = `<img src="${p.thumb}" alt="${p.id}"><div>${p.id}　${fmt(p.taken)}` +
-        `${p.kind ? '　[' + KINDS[p.kind] + ']' : ''}${p.est ? '　<small>※位置は推定</small>' : ''}</div>`;
+        `${p.kind ? '　[' + KINDS[p.kind] + ']' : ''}${p.est ? '　<small>※位置は' + (p.note || '推定') + '</small>' : ''}</div>`;
       if (p.photo) {
         box.querySelector('img').addEventListener('click', () => showViewer(p));
       }
