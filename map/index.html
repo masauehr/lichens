@@ -22,11 +22,12 @@
     }
     #info button { margin-left: 10px; cursor: pointer; }
     #nopos {
-      display: none; position: absolute; z-index: 1000; top: 52px; right: 10px; bottom: 10px;
+      display: none; position: absolute; z-index: 1000; top: 52px; left: 50px; bottom: 10px;
       width: min(360px, 90vw); overflow-y: auto; background: rgba(255,255,255,.95);
       border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,.3); padding: 8px;
     }
-    #nopos h3 { margin: 0 0 6px; font-size: 14px; }
+    #nopos h3 { margin: 0 0 4px; font-size: 14px; }
+    #nopos .note { margin: 0 0 8px; font-size: 12px; color: #a15c00; }
     #nopos .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
     #nopos figure { margin: 0; font-size: 10px; text-align: center; }
     #nopos img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 3px; cursor: zoom-in; display: block; }
@@ -155,7 +156,8 @@
 
     // 位置不明の写真は、ピンの代わりにサムネイル一覧（パネル）で見られるようにする
     function renderNoPos(list) {
-      nopos.innerHTML = `<h3>位置不明の写真（${list.length}枚）</h3><div class="grid"></div>`;
+      nopos.innerHTML = `<h3>📌 位置不明の写真（${list.length}枚）</h3>` +
+        `<div class="note">※撮影場所が分からない写真です。後で確認する予定です。</div><div class="grid"></div>`;
       const grid = nopos.querySelector('.grid');
       list.forEach(p => {
         const fig = document.createElement('figure');
@@ -165,7 +167,7 @@
         grid.appendChild(fig);
       });
       const btn = info.querySelector('.nopos-btn');
-      if (btn) btn.textContent = `位置不明 ${list.length}枚`;
+      if (btn) btn.textContent = `📌 位置不明 ${list.length}枚（後で確認予定）`;
     }
 
     function render(fit) {
