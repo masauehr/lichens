@@ -58,6 +58,10 @@
         { attribution: gsiAttr, maxZoom: 19 }),
       '標準地図（地理院）': L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png',
         { attribution: gsiAttr, maxZoom: 18 }),
+      '色別標高図（地理院）': L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/relief/{z}/{x}/{y}.png',
+        { attribution: gsiAttr, maxNativeZoom: 15, maxZoom: 19 }),
+      '陰影起伏図（地理院）': L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/hillshademap/{z}/{x}/{y}.png',
+        { attribution: gsiAttr, maxNativeZoom: 16, maxZoom: 19 }),
       'OpenStreetMap': L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
         { attribution: '&copy; OpenStreetMap contributors', maxZoom: 19 }),
     };
@@ -81,6 +85,18 @@
     const info = document.getElementById('info');
     const shown = { main: true, maybe: true, context: true };
 
+    // 標高（国土地理院の標高API。日本国内のみ）。同じ地点は再取得しない
+    const elevCache = new Map();
+    async function getElevation(lat, lon) {
+      const key = lat.toFixed(5) + ',' + lon.toFixed(5);
+      if (!elevCache.has(key)) {
+        elevCache.set(key, fetch(`https://cyberjapandata2.gsi.go.jp/general/dem/scripts/getelevation.php?lon=${lon}&lat=${lat}&outtype=JSON`)
+          .then(r => r.json()).then(j => (typeof j.elevation === 'number' ? j.elevation : null)).catch(() => null));
+      }
+      return elevCache.get(key);
+    }
+    const fmtElev = v => (v === null ? '標高 取得できず' : `標高 ${v.toFixed(1)} m`);
+
     function makeMarker(p) {
       const icon = L.divIcon({
         className: '',
@@ -96,6 +112,13 @@
         box.querySelector('img').addEventListener('click', () => showViewer(p));
       }
       m.bindPopup(box);
+      m.on('popupopen', async () => {
+        const div = document.createElement('div');
+        div.textContent = '標高 取得中…';
+        box.appendChild(div);
+        div.textContent = fmtElev(await getElevation(p.lat, p.lon));
+        m.getPopup().update();
+      });
       return m;
     }
 
@@ -148,7 +171,8 @@
         photos.forEach(p => {
           if (p.lat != null && map.distance(e.latlng, [p.lat, p.lon]) <= r) { cnt[p.kind || 'main']++; n++; }
         });
-        box.innerHTML = `座標 ${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}<br>` +
+        getElevation(e.latlng.lat, e.latlng.lng).then(v => { const t = document.getElementById('pe'); if (t) t.textContent = fmtElev(v); });
+        box.innerHTML = `座標 ${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}　<span id="pe"></span><br>` +
           `半径 <input id="pr" type="number" value="${r}" min="50" step="50" style="width:70px"> m 以内: <b>${n}枚</b>` +
           `（地衣類 ${cnt.main} / 可能性 ${cnt.maybe} / 全景 ${cnt.context}）`;
       });

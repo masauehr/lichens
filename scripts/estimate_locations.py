@@ -3,6 +3,8 @@
 規則:
     interp  ... 前後の両方にGPS写真があり、どちらも --both 秒以内 → 時刻で直線補間
     nearest ... 片側のみ、--one 秒以内 → 最寄りの写真の位置
+    carry   ... 上記に当てはまらない場合、直前のGPS写真から --carry 秒以内 → その写真と同じ場所
+                （デジカメの写真を翌日ごろに写真アプリへ取り込むことがあるため。間にGPS写真が無いことが前提）
     上記以外は位置なし（地図に載せない）
 
 使い方: .venv/bin/python scripts/estimate_locations.py   → work/est_loc.json
@@ -23,6 +25,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--both", type=int, default=1800)
     ap.add_argument("--one", type=int, default=600)
+    ap.add_argument("--carry", type=int, default=86400, help="直前のGPS写真の場所を引き継ぐ最大秒数（既定1日）")
     args = ap.parse_args()
 
     db = osxphotos.PhotosDB()
@@ -31,7 +34,7 @@ def main() -> None:
     rt = [p.date.timestamp() for p in ref]
     album = next(a for a in db.album_info if a.title == ALBUM)
 
-    out, stat = {}, {"interp": 0, "nearest": 0, "none": 0}
+    out, stat = {}, {"interp": 0, "nearest": 0, "carry": 0, "none": 0}
     for p in album.photos:
         if p.location[0] is not None:
             continue
@@ -54,10 +57,13 @@ def main() -> None:
                 g, q = min(cands, key=lambda c: c[0])
                 out[stem] = {"lat": q.location[0], "lon": q.location[1], "method": "nearest", "gap": int(g)}
                 stat["nearest"] += 1
+            elif prev and gp <= args.carry:  # 直前のGPS写真から1日以内: 同じ場所とみなす
+                out[stem] = {"lat": prev.location[0], "lon": prev.location[1], "method": "carry", "gap": int(gp)}
+                stat["carry"] += 1
             else:
                 stat["none"] += 1
     Path("work/est_loc.json").write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
-    print(f"推定: 補間 {stat['interp']} / 最寄り {stat['nearest']} / 位置なし {stat['none']}")
+    print(f"推定: 補間 {stat['interp']} / 最寄り {stat['nearest']} / 引き継ぎ {stat['carry']} / 位置なし {stat['none']}")
 
 
 if __name__ == "__main__":

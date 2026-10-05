@@ -18,6 +18,7 @@
 import argparse
 import json
 import math
+import re
 import shutil
 import subprocess
 from concurrent.futures import ProcessPoolExecutor
@@ -81,7 +82,8 @@ def main() -> None:
     items, skipped, jobs = [], [], []
     for row in sorted(read_exif(src), key=lambda r: r["SourceFile"]):
         f = Path(row["SourceFile"])
-        e = est.get(f.stem)
+        base = re.sub(r" \(\d+\)$", "", f.stem)  # 重複ファイル「名前 (1)」は元の名前で引き当てる
+        e = est.get(f.stem) or est.get(base)
         if "GPSLatitude" in row and "GPSLongitude" in row:
             lat, lon, estimated = row["GPSLatitude"], row["GPSLongitude"], False
         elif e:  # GPSなし → 撮影時刻からの推定位置
@@ -114,7 +116,7 @@ def main() -> None:
         if estimated:
             item["est"] = True
         if kinds:
-            item["kind"] = kinds.get(f.stem, "context")
+            item["kind"] = kinds.get(f.stem) or kinds.get(base, "context")
         items.append(item)
 
     with ProcessPoolExecutor() as ex:
