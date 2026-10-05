@@ -5,6 +5,8 @@
     nearest ... 片側のみ、--one 秒以内 → 最寄りの写真の位置
     carry   ... 上記に当てはまらない場合、直前のGPS写真から --carry 秒以内 → その写真と同じ場所
                 （デジカメの写真を翌日ごろに写真アプリへ取り込むことがあるため。間にGPS写真が無いことが前提）
+    sameday ... 上記で決まらず、同じ撮影日にGPS写真がある場合 → その日のGPS写真のうち撮影時刻が最も近いものの近く
+                （人が場所を判断した日＝manual があればそちらを優先）
     manual  ... 上記で決まらない写真に、scripts/manual_locations.json の日付ごとの暫定位置を適用（人が場所を判断した分）
     上記以外は位置なし（地図に載せない）
 
@@ -38,8 +40,11 @@ def main() -> None:
                  key=lambda p: p.date)
     rt = [p.date.timestamp() for p in ref]
     album = next(a for a in db.album_info if a.title == ALBUM)
+    byday = {}
+    for q in ref:
+        byday.setdefault(q.date.strftime("%Y-%m-%d"), []).append(q)
 
-    out, stat = {}, {"interp": 0, "nearest": 0, "carry": 0, "manual": 0, "none": 0}
+    out, stat = {}, {"interp": 0, "nearest": 0, "carry": 0, "manual": 0, "sameday": 0, "none": 0}
     for p in album.photos:
         if p.location[0] is not None:
             continue
@@ -69,10 +74,15 @@ def main() -> None:
                 m = manual[p.date.strftime("%Y-%m-%d")]
                 out[stem] = {"lat": m["lat"], "lon": m["lon"], "method": "manual", "note": m.get("note", "暫定")}
                 stat["manual"] += 1
+            elif p.date.strftime("%Y-%m-%d") in byday:  # 同じ撮影日にGPS写真がある: 時刻が最も近い写真の近くに置く
+                q = min(byday[p.date.strftime("%Y-%m-%d")], key=lambda r: abs(r.date.timestamp() - t))
+                out[stem] = {"lat": q.location[0], "lon": q.location[1], "method": "sameday",
+                             "gap": int(abs(q.date.timestamp() - t)), "note": "同じ日のiPhone写真の近く"}
+                stat["sameday"] += 1
             else:
                 stat["none"] += 1
     Path("work/est_loc.json").write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
-    print(f"推定: 補間 {stat['interp']} / 最寄り {stat['nearest']} / 引き継ぎ {stat['carry']} / 手動 {stat['manual']} / 位置なし {stat['none']}")
+    print(f"推定: 補間 {stat['interp']} / 最寄り {stat['nearest']} / 引き継ぎ {stat['carry']} / 手動 {stat['manual']} / 同日 {stat['sameday']} / 位置なし {stat['none']}")
 
 
 if __name__ == "__main__":
