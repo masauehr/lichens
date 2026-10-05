@@ -95,7 +95,15 @@
       }
       return elevCache.get(key);
     }
-    const fmtElev = v => (v === null ? '標高 取得できず' : `標高 ${v.toFixed(1)} m`);
+    const fmtElev = v => (v === null ? '標高 データなし（海上・範囲外など）' : `標高 ${v.toFixed(1)} m`);
+
+    // 地図をクリックすると、その地点の緯度・経度・標高を表示する（ピンやクラスタのクリックは対象外）
+    map.on('click', async e => {
+      const { lat, lng } = e.latlng;
+      const body = el => `緯度 ${lat.toFixed(5)}<br>経度 ${lng.toFixed(5)}<br>${el}`;
+      const pop = L.popup().setLatLng(e.latlng).setContent(body('標高 取得中…')).openOn(map);
+      pop.setContent(body(fmtElev(await getElevation(lat, lng))));
+    });
 
     function makeMarker(p) {
       const icon = L.divIcon({
