@@ -6,6 +6,7 @@
     carry   ... 上記に当てはまらない場合、直前のGPS写真から --carry 秒以内 → その写真と同じ場所
                 （デジカメの写真を翌日ごろに写真アプリへ取り込むことがあるため。間にGPS写真が無いことが前提）
     sameday ... 上記で決まらず、同じ撮影日にGPS写真がある場合 → その日のGPS写真のうち撮影時刻が最も近いものの近く
+                （--sameday-max で時間差の上限を設けられる。既定は無制限。時間差が数時間あると移動中の位置を借りることがある）
                 （人が場所を判断した日＝manual があればそちらを優先）
     manual  ... 上記で決まらない写真に、scripts/manual_locations.json の日付ごとの暫定位置を適用（人が場所を判断した分）
     上記以外は位置なし（地図に載せない）
@@ -30,6 +31,9 @@ def main() -> None:
     ap.add_argument("--one", type=int, default=600)
     ap.add_argument("--manual", default="scripts/manual_locations.json")
     ap.add_argument("--carry", type=int, default=86400, help="直前のGPS写真の場所を引き継ぐ最大秒数（既定1日）")
+    ap.add_argument("--sameday-max", type=int, default=0,
+                    help="同日規則（sameday）で借りるGPS写真との最大時間差（秒）。超える写真は位置なしにする。0=無制限（従来どおり）。"
+                         "例: 7200 = 2時間。時間差が大きいと移動中（船など）の位置を借りてしまう")
     args = ap.parse_args()
 
     manual = {}
@@ -76,6 +80,9 @@ def main() -> None:
                 stat["manual"] += 1
             elif p.date.strftime("%Y-%m-%d") in byday:  # 同じ撮影日にGPS写真がある: 時刻が最も近い写真の近くに置く
                 q = min(byday[p.date.strftime("%Y-%m-%d")], key=lambda r: abs(r.date.timestamp() - t))
+                if args.sameday_max and abs(q.date.timestamp() - t) > args.sameday_max:
+                    stat["none"] += 1  # 時間差が大きすぎる: 位置は決めない（地図に載せない）
+                    continue
                 out[stem] = {"lat": q.location[0], "lon": q.location[1], "method": "sameday",
                              "gap": int(abs(q.date.timestamp() - t)), "note": "同じ日のiPhone写真の近く"}
                 stat["sameday"] += 1

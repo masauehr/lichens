@@ -117,6 +117,10 @@ def main() -> None:
             item["est"] = True
             if e and e.get("note"):
                 item["note"] = e["note"]
+            if e and e.get("method"):  # 推定の方法（interp/nearest/carry/sameday/manual）と時間差（秒）。信頼度の判定に使う
+                item["method"] = e["method"]
+                if "gap" in e:
+                    item["gap"] = e["gap"]
         if kinds:
             item["kind"] = kinds.get(f.stem) or kinds.get(base, "context")
         items.append(item)
